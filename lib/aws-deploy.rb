@@ -1,3 +1,4 @@
+require 'aws'
 require File.join(File.dirname(__FILE__), "aws-deploy/version")
 require File.join(File.dirname(__FILE__), "aws-deploy/credentials")
 require File.join(File.dirname(__FILE__), "aws-deploy/load_balance")
