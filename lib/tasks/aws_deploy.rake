@@ -187,7 +187,7 @@ namespace :aws_deploy do
   desc "Deploy to production at Amazon"
   task :production, :speed do |t, args|
     
-    AWS_CONFIG ||= YAML::load(File.read('config/aws_deploy.yml'))["sandbox"]
+    AWS_CONFIG ||= YAML::load(File.read('config/aws_deploy.yml'))["production"]
 
     AwsDeploy.configure do |config|
       config.environment = AWS_CONFIG['environment']
