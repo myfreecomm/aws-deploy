@@ -30,6 +30,26 @@ namespace :aws_deploy do
   end
   
   # -----------
+  def aws_check_current_branch(branch_to_deploy)
+    current_branch = `git branch`.match(/\*\s([\w\/]+)/)[1]
+
+    if current_branch != branch_to_deploy
+      raise %{O deploy deve ser feito a partir do branch "#{branch_to_deploy}".}
+    end
+  end
+
+  def aws_check_new_migrations(credentials)
+    aws_inform "Verificando se o deploy possui novas migrations..."
+
+    instance = AwsDeploy::Instance.new(credentials).find_all_in_service.first
+    remote_migrations_count = `ssh #{instance[:dns_name]} "ls -1 /srv/myfinance/src/db/migrate/*.rb | wc -l"`.strip
+    local_migrations_count = `ls -1 #{Rails.root}/db/migrate/*.rb | wc -l`.strip
+
+    if remote_migrations_count != local_migrations_count
+      raise "O deploy possui novas migrations."
+    end
+  end
+
   def aws_generate_launchconfig(branch)
     raise "CERTMAN_HOME not set" if ENV['CERTMAN_HOME'].blank?
     aws_inform "Gerando novo launchconfig usando o branch master..."
@@ -126,8 +146,12 @@ namespace :aws_deploy do
     args.with_defaults(:speed => 'normal')
     credentials = AwsDeploy::Credentials.new
 
+    aws_check_current_branch('master')
+
+    aws_check_new_migrations(credentials) if args.speed == 'fast'
+
     aws_generate_launchconfig('master')
-    
+
     launchconfig = aws_ask('Digite o nome do launchconfig gerado (e dê enter)')
     
     old_autoscaling_min_size, old_autoscaling_max_size, old_autoscaling_desired_capacity = aws_get_old_autoscaling_settings
@@ -198,6 +222,10 @@ namespace :aws_deploy do
     args.with_defaults(:speed => 'normal')
 
     credentials = AwsDeploy::Credentials.new
+
+    aws_check_current_branch('deploy')
+
+    aws_check_new_migrations(credentials) if args.speed == 'fast'
 
     aws_generate_launchconfig('deploy')
     
