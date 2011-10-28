@@ -80,7 +80,7 @@ namespace :aws_deploy do
   end
   def aws_set_maintenance_on_for_all_instances(credentials)
     aws_inform "Colocando todas as instâncias atuais em manutenção..."
-    AwsDeploy::Maintenance.new(credentials, AwsDeploy.path).on
+    AwsDeploy::Maintenance.new(credentials, AwsDeploy::Configuration.path).on
   end
   def aws_shut_down_all_workers_on_all_instances(credentials)
     aws_inform "Desligando todos os workers de todas as instâncias..."
@@ -92,7 +92,7 @@ namespace :aws_deploy do
   end
   def aws_clear_cache(credentials) # FIXME
     aws_inform "Limpando elastic-cache (memcached) ..."
-    AwsDeploy::Cache.new(credentials, AwsDeploy.path).clear
+    AwsDeploy::Cache.new(credentials, AwsDeploy::Configuration.path).clear
   end
   def aws_get_current_instances_ids
     output = `as-describe-auto-scaling-groups #{AwsDeploy.configuration.autoscaling_name} --show-xml`
