@@ -80,7 +80,7 @@ namespace :aws_deploy do
   end
   def aws_set_maintenance_on_for_all_instances(credentials)
     aws_inform "Colocando todas as instâncias atuais em manutenção..."
-    AwsDeploy::Maintenance.new(credentials, '/srv/fundos/src').on
+    AwsDeploy::Maintenance.new(credentials, AwsDeploy.path).on
   end
   def aws_shut_down_all_workers_on_all_instances(credentials)
     aws_inform "Desligando todos os workers de todas as instâncias..."
@@ -92,7 +92,7 @@ namespace :aws_deploy do
   end
   def aws_clear_cache(credentials) # FIXME
     aws_inform "Limpando elastic-cache (memcached) ..."
-    AwsDeploy::Cache.new(credentials, '/srv/fundos/src').clear
+    AwsDeploy::Cache.new(credentials, AwsDeploy.path).clear
   end
   def aws_get_current_instances_ids
     output = `as-describe-auto-scaling-groups #{AwsDeploy.configuration.autoscaling_name} --show-xml`
@@ -141,6 +141,7 @@ namespace :aws_deploy do
       config.environment = AWS_CONFIG['environment']
       config.autoscaling_name = AWS_CONFIG['autoscaling_name']
       config.load_balancer_name = AWS_CONFIG['load_balancer_name']
+      config.path = AWS_CONFIG['path']
     end
 
     args.with_defaults(:speed => 'normal')
