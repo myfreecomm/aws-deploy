@@ -105,13 +105,14 @@ namespace :aws_deploy do
     aws_inform "Terminando instância de id #{id}..."
     aws_run "as-terminate-instance-in-auto-scaling-group #{id} --no-decrement-desired-capacity --force"
   end
-  def aws_wait_new_instance_show_as_inservice_on_loadbalancer(launchconfig)
+  def aws_wait_new_instance_show_as_inservice_on_loadbalancer(launchconfig, old_instance_ids)
     new_instance_id = nil
     while new_instance_id.nil? do
       output = `as-describe-auto-scaling-groups #{AwsDeploy.configuration.autoscaling_name} --show-xml`
       xml = Nokogiri::XML.parse(output)
       if xml.search("AutoScalingGroups Instances member").select { |i| i.at("LaunchConfigurationName").text == launchconfig }.size > 0
-        new_instance_id = xml.search("AutoScalingGroups Instances member").select { |i| i.at("LaunchConfigurationName").text == launchconfig }.first.at('InstanceId').text
+        new_instance_node = xml.search("AutoScalingGroups Instances member").select { |i| i.at("LaunchConfigurationName").text == launchconfig && !old_instance_ids.include?(i.at('InstanceId').text) }.first
+        new_instance_id = new_instance_node.at('InstanceId').text unless new_instance_node.nil?
       end
       aws_inform "Esperando 5 segundos para nova instância surgir..."
       sleep 5
@@ -191,7 +192,7 @@ namespace :aws_deploy do
       aws_kill_instance(instance_id)
       
       # esperar uma nova máquina levantar e estar InService no elastic-load-balancer
-      aws_wait_new_instance_show_as_inservice_on_loadbalancer(launchconfig)
+      aws_wait_new_instance_show_as_inservice_on_loadbalancer(launchconfig, instance_ids)
 
       # matar todas as outras instâncias
       unless instance_ids.empty?
@@ -265,7 +266,7 @@ namespace :aws_deploy do
       aws_kill_instance(instance_id)
       
       # esperar uma nova máquina levantar e estar InService no elastic-load-balancer
-      aws_wait_new_instance_show_as_inservice_on_loadbalancer(launchconfig)
+      aws_wait_new_instance_show_as_inservice_on_loadbalancer(launchconfig, instance_ids)
 
       # matar todas as outras instâncias
       unless instance_ids.empty?
