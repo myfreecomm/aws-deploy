@@ -188,13 +188,13 @@ namespace :aws_deploy do
       instance_ids = aws_get_current_instances_ids
     
       # matar primaira máquina existente
-      instance_id = instance_ids.pop
-      aws_kill_instance(instance_id)
+      aws_kill_instance(instance_ids.first)
       
       # esperar uma nova máquina levantar e estar InService no elastic-load-balancer
       aws_wait_new_instance_show_as_inservice_on_loadbalancer(launchconfig, instance_ids)
 
       # matar todas as outras instâncias
+      instance_ids.shift
       unless instance_ids.empty?
         aws_inform "Terminando todas as outras instâncias..."
         until instance_ids.empty?
@@ -262,13 +262,13 @@ namespace :aws_deploy do
       instance_ids = aws_get_current_instances_ids
     
       # matar primaira máquina existente
-      instance_id = instance_ids.pop
-      aws_kill_instance(instance_id)
+      aws_kill_instance(instance_ids.first)
       
       # esperar uma nova máquina levantar e estar InService no elastic-load-balancer
       aws_wait_new_instance_show_as_inservice_on_loadbalancer(launchconfig, instance_ids)
 
       # matar todas as outras instâncias
+      instance_ids.shift
       unless instance_ids.empty?
         aws_inform "Terminando todas as outras instâncias..."
         until instance_ids.empty?
