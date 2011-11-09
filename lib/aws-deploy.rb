@@ -20,6 +20,6 @@ module AwsDeploy
   end
 
   class Configuration
-    attr_accessor :environment, :autoscaling_name, :load_balancer_name, :path
+    attr_accessor :environment, :autoscaling_name, :load_balancer_name, :path, :rds_instance_identifier
   end
 end
