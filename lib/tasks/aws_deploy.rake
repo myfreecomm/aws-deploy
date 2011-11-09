@@ -165,7 +165,7 @@ namespace :aws_deploy do
         db_snapshot_identifier: node.at('DBSnapshotIdentifier').try(:text)
       }
     end
-    avaiable_snapshots = snapshots.select { h[:status] == 'available' }
+    avaiable_snapshots = snapshots.select { |h| h[:status] == 'available' }
     if avaiable_snapshots.size > 3
       avaiable_snapshots.sort_by { |h| h[:snapshot_create_time] }[3..-1].each do |snap|
         snapshot_name = snap[:db_snapshot_identifier]
