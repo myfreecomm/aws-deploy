@@ -134,7 +134,7 @@ namespace :aws_deploy do
   def aws_rds_create_snapshot
     db_name = AwsDeploy.configuration.rds_instance_identifier
     raise "Invalid RDS DB instance name" if (db_name.nil? || db_name == '')
-    snapshot_name = "#{db_name}_#{Time.now.utc.strftime('%Y-%m-%d-%H-%M-%S-%Z')}"
+    snapshot_name = "#{db_name}-#{Time.now.utc.strftime('%Y%m%d%H%M%S%Z')}"
     aws_inform "Criando novo snapshot do banco '#{db_name}' com nome '#{snapshot_name}'..."
     aws_run "rds-create-db-snapshot #{db_name} --db-snapshot-identifier #{snapshot_name}"
     snapshot_name
