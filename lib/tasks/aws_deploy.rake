@@ -46,13 +46,13 @@ namespace :aws_deploy do
     local_migrations_count = `ls -1 #{Rails.root}/db/migrate/*.rb | wc -l`.strip
 
     if remote_migrations_count != local_migrations_count
-      raise "O deploy possui novas migrations."
+      raise "O deploy possui novas migrations, você não pode usar a opção 'fast'!"
     end
   end
 
   def aws_generate_launchconfig(branch)
     raise "CERTMAN_HOME not set" if ENV['CERTMAN_HOME'].blank?
-    aws_inform "Gerando novo launchconfig usando o branch master..."
+    aws_inform "Gerando novo launchconfig usando o branch #{branch}..."
     aws_run "cd #{ENV['CERTMAN_HOME']} && . bin/activate && cd src && fab #{AwsDeploy.configuration.environment} deploy:#{File.dirname(Rails.root)},branch=#{branch}"
   end
   def aws_get_old_autoscaling_settings
@@ -131,6 +131,51 @@ namespace :aws_deploy do
     aws_inform "'Re-ativando' auto-scaling..."
     aws_run "as-update-auto-scaling-group #{AwsDeploy.configuration.autoscaling_name} --min-size #{min_size} --max-size #{max_size} --desired-capacity #{desired_capacity}"
   end
+  def aws_rds_create_snapshot
+    db_name = AwsDeploy.configuration.rds_instance_identifier
+    raise "Invalid RDS DB instance name" if (db_name.nil? || db_name == '')
+    snapshot_name = "#{db_name}_#{Time.now.utc.strftime('%Y-%m-%d-%H-%M-%S-%Z')}"
+    aws_inform "Criando novo snapshot do banco '#{db_name}' com nome '#{snapshot_name}'..."
+    aws_run "rds-create-db-snapshot #{db_name} --db-snapshot-identifier #{snapshot_name}"
+    snapshot_name
+  end
+  def aws_rds_wait_snapshot_creation(snapshot_name)
+    status = nil
+    until status == 'available' do
+      output = `rds-describe-db-snapshots --db-snapshot-identifier #{snapshot_name} --show-xml`
+      status = 'available' if output =~ /<Status>available<\/Status>/
+      aws_inform "Esperando 10 segundos para snapshot '#{snapshot_name}' ficar disponível..."
+      sleep 10
+    end
+    aws_inform "Snapshot '#{snapshot_name}' criado com sucesso."
+  end
+  def aws_rds_remove_old_snapshots
+    db_name = AwsDeploy.configuration.rds_instance_identifier
+    raise "Invalid RDS DB instance name" if (db_name.nil? || db_name == '')
+    aws_inform "Buscando lista de snapshots existentes do banco '#{db_name}'..."
+    output = `rds-describe-db-snapshots --db-instance-identifier #{db_name} --show-xml`
+    xml = Nokogiri::XML.parse(output)
+    snapshots = xml.search('DBSnapshots DBSnapshot').map do |node|
+      time = node.at('SnapshotCreateTime').try(:text)
+      time = Time.parse(time) unless (time.nil? || time == '')
+      {
+        snapshot_create_time: time,
+        status: node.at('Status').try(:text),
+        db_instance_identifier: node.at('DBInstanceIdentifier').try(:text),
+        db_snapshot_identifier: node.at('DBSnapshotIdentifier').try(:text)
+      }
+    end
+    avaiable_snapshots = snapshots.select { h[:status] == 'available' }
+    if avaiable_snapshots.size > 3
+      avaiable_snapshots.sort_by { |h| h[:snapshot_create_time] }[3..-1].each do |snap|
+        snapshot_name = snap[:db_snapshot_identifier]
+        aws_inform "Apagando snapshot antigo '#{snapshot_name}'..."
+        aws_run "rds-delete-db-snapshot #{snapshot_name} --force"
+      end
+    else
+      aws_inform "Não é necessário apagar snapshots, há apenas #{avaiable_snapshots.size} atualmente."
+    end
+  end
   # -----------
   
   desc "Deploy to sandbox at Amazon"
@@ -142,6 +187,7 @@ namespace :aws_deploy do
       config.environment = AWS_CONFIG['environment']
       config.autoscaling_name = AWS_CONFIG['autoscaling_name']
       config.load_balancer_name = AWS_CONFIG['load_balancer_name']
+      config.rds_instance_identifier = AWS_CONFIG['rds_instance_identifier']
       config.path = AWS_CONFIG['path']
     end
 
@@ -172,13 +218,7 @@ namespace :aws_deploy do
       end
 
       aws_shut_down_all_workers_on_all_instances(credentials)
-    
-      # restaurar último backup de produção para sandbox
-      # TODO
-    
-      # anonimizar banco do sandbox
-      # TODO
-    
+        
       # configurar auto-scaling-group para usar novo launchconfig
       aws_update_autoscalint_to_use_new_launchconfig(launchconfig)
     
@@ -219,6 +259,8 @@ namespace :aws_deploy do
       config.environment = AWS_CONFIG['environment']
       config.autoscaling_name = AWS_CONFIG['autoscaling_name']
       config.load_balancer_name = AWS_CONFIG['load_balancer_name']
+      config.rds_instance_identifier = AWS_CONFIG['rds_instance_identifier']
+      config.path = AWS_CONFIG['path']
     end
     
     args.with_defaults(:speed => 'normal')
@@ -250,9 +292,15 @@ namespace :aws_deploy do
 
       aws_shut_down_all_workers_on_all_instances(credentials)
     
-      # fazer backup do banco de dados e mandar para s3
-      # TODO
-    
+      # tira snapshot (backup) do banco
+      new_snapshot_name = aws_rds_create_snapshot
+
+      # espera o snapshot estar concluído
+      aws_rds_wait_snapshot_creation(new_snapshot_name)
+
+      # remove snapshots antigos (mantém apenas os últimos 3)
+      aws_rds_remove_old_snapshots
+
       # configurar auto-scaling-group para usar novo launchconfig
       aws_update_autoscalint_to_use_new_launchconfig(launchconfig)
     
