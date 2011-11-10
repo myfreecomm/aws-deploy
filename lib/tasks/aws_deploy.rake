@@ -290,17 +290,14 @@ namespace :aws_deploy do
         aws_set_maintenance_on_for_all_instances(credentials)
       end
 
-      aws_shut_down_all_workers_on_all_instances(credentials)
-    
       # tira snapshot (backup) do banco
       new_snapshot_name = aws_rds_create_snapshot
-
-      # espera o snapshot estar concluído
-      aws_rds_wait_snapshot_creation(new_snapshot_name)
 
       # remove snapshots antigos (mantém apenas os últimos 3)
       aws_rds_remove_old_snapshots
 
+      aws_shut_down_all_workers_on_all_instances(credentials)
+    
       # configurar auto-scaling-group para usar novo launchconfig
       aws_update_autoscalint_to_use_new_launchconfig(launchconfig)
     
