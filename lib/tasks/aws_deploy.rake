@@ -53,7 +53,12 @@ namespace :aws_deploy do
   def aws_generate_launchconfig(branch)
     raise "CERTMAN_HOME not set" if ENV['CERTMAN_HOME'].blank?
     aws_inform "Gerando novo launchconfig usando o branch #{branch}..."
-    aws_run "cd #{ENV['CERTMAN_HOME']} && . bin/activate && cd src && fab #{AwsDeploy.configuration.environment} deploy:#{File.dirname(Rails.root)},branch=#{branch}"
+    output = `cd #{ENV['CERTMAN_HOME']} && . bin/activate && cd src && fab #{AwsDeploy.configuration.environment} deploy:#{File.dirname(Rails.root)},branch=#{branch}`
+    raise "Failed to generate launchconfig!" unless $?.success?
+    output.match(/INFO \- creating launch config (.*\-\d{4}\-\d{2}\-\d{2}\-\d{2}\-\d{2})/)
+    launchconfig = $1
+    raise "Launchconfig name not found!" if launchconfig.nil? || launchconfig.strip.empty?
+    launchconfig
   end
   def aws_get_old_autoscaling_settings
     aws_inform "Buscando configurações atuais do auto-scaling-group..."
@@ -70,13 +75,30 @@ namespace :aws_deploy do
   end
   def aws_query_all_instances_inservice_and_healthy_on_autoscaling
     aws_inform "Eis as instâncias registradas no auto-scaling-group neste momento:"
-    aws_run "as-describe-auto-scaling-groups #{AwsDeploy.configuration.autoscaling_name}"
-    aws_confirm "Todas as instâncias estão InService & Healthy?"
+    output = `as-describe-auto-scaling-groups #{AwsDeploy.configuration.autoscaling_name} --show-xml`
+    raise "Failed to query current auto-scaling-group information!" unless $?.success?
+    xml = Nokogiri::XML.parse(output)
+    all_in_service = xml.search('Instances > member > LifecycleState').map(&:text).uniq == ['InService']
+    all_healthy = xml.search('Instances > member > HealthStatus').map(&:text).uniq == ['Healthy']
+    if all_in_service && all_healthy
+      aws_inform "Todas as instâncias InService & Healthy no auto-scaling-group '#{AwsDeploy.configuration.autoscaling_name}'"
+    else
+      aws_inform "ERRO: Todas as instâncias atuais devem estar InService e Healty no auto-scaling-group '#{AwsDeploy.configuration.autoscaling_name}' para fazer deploy!"
+      raise 'Not all instances ready in auto-scaling-group'
+    end
   end
   def aws_query_all_instances_inservice_on_load_balancer
     aws_inform "Eis as instâncias registradas no elastic-load-balancer neste momento:"
-    aws_run "elb-describe-instance-health #{AwsDeploy.configuration.load_balancer_name}"
-    aws_confirm "Todas as instâncias estão InService?"
+    output = `elb-describe-instance-health #{AwsDeploy.configuration.load_balancer_name} --show-xml`
+    raise "Failed to query current elastic-load-balancer information!" unless $?.success?
+    xml = Nokogiri::XML.parse(output)
+    all_in_service = xml.search('InstanceStates > member > State').map(&:text).uniq == ['InService']
+    if all_in_service
+      aws_inform "Todas as instâncias InService no elastic-load-balancer '#{AwsDeploy.configuration.load_balancer_name}'"
+    else
+      aws_inform "ERRO: Todas as instâncias atuais devem estar InService no elastic-load-balancer '#{AwsDeploy.configuration.load_balancer_name}' para fazer deploy!"
+      raise 'Not all instances ready in elastic-load-balancer'
+    end
   end
   def aws_set_maintenance_on_for_all_instances(credentials)
     aws_inform "Colocando todas as instâncias atuais em manutenção..."
@@ -198,10 +220,8 @@ namespace :aws_deploy do
 
     aws_check_new_migrations(credentials) if args.speed == 'fast'
 
-    aws_generate_launchconfig('master')
+    launchconfig = aws_generate_launchconfig('master')
 
-    launchconfig = aws_ask('Digite o nome do launchconfig gerado (e dê enter)')
-    
     old_autoscaling_min_size, old_autoscaling_max_size, old_autoscaling_desired_capacity = aws_get_old_autoscaling_settings
 
     begin
@@ -271,9 +291,7 @@ namespace :aws_deploy do
 
     aws_check_new_migrations(credentials) if args.speed == 'fast'
 
-    aws_generate_launchconfig('deploy')
-    
-    launchconfig = aws_ask('Digite o nome do launchconfig gerado (e dê enter)')
+    launchconfig = aws_generate_launchconfig('deploy')
     
     old_autoscaling_min_size, old_autoscaling_max_size, old_autoscaling_desired_capacity = aws_get_old_autoscaling_settings
 
