@@ -55,7 +55,7 @@ namespace :aws_deploy do
     aws_inform "Gerando novo launchconfig usando o branch #{branch}..."
     output = `cd #{ENV['CERTMAN_HOME']} && . bin/activate && cd src && fab #{AwsDeploy.configuration.environment} deploy:#{File.dirname(Rails.root)},branch=#{branch}`
     raise "Failed to generate launchconfig!" unless $?.success?
-    output.match(/INFO - creating launch config (.*-\d{4}-\d{2}-\d{2}-\d{4})/)
+    output.match(/INFO \- creating launch config (.*\-\d{4}\-\d{2}\-\d{2}\-\d{2}\-\d{2})/)
     launchconfig = $1
     raise "Launchconfig name not found!" if launchconfig.nil? || launchconfig.strip.empty?
     launchconfig
