@@ -30,10 +30,11 @@ namespace :aws_deploy do
   end
   
   # -----------
+  def get_current_branch
+    `git branch`.match(/\*\s([\w\/]+)/)[1]
+  end
   def aws_check_current_branch(branch_to_deploy)
-    current_branch = `git branch`.match(/\*\s([\w\/]+)/)[1]
-
-    if current_branch != branch_to_deploy
+    if get_current_branch != branch_to_deploy
       raise %{O deploy deve ser feito a partir do branch "#{branch_to_deploy}".}
     end
   end
@@ -194,11 +195,9 @@ namespace :aws_deploy do
     args.with_defaults(:speed => 'normal')
     credentials = AwsDeploy::Credentials.new
 
-    aws_check_current_branch('master')
-
     aws_check_new_migrations(credentials) if args.speed == 'fast'
 
-    aws_generate_launchconfig('master')
+    aws_generate_launchconfig(get_current_branch)
 
     launchconfig = aws_ask('Digite o nome do launchconfig gerado (e dê enter)')
     
