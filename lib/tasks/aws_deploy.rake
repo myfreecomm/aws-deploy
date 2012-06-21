@@ -1,11 +1,11 @@
 # -*- encoding : utf-8 -*-
 namespace :aws_deploy do
-  
+
   desc "connect_to_s3"
   task :connect_to_s3 do
     s3_credentials = YAML::load(File.read(File.join(Rails.root, 'config/s3_backups.yml')))
     AWS::S3::Base.establish_connection!(
-      :access_key_id     => s3_credentials['key'], 
+      :access_key_id     => s3_credentials['key'],
       :secret_access_key => s3_credentials['secret']
     )
   end
@@ -24,11 +24,11 @@ namespace :aws_deploy do
     print "\n ---> #{question}: "
     STDIN.gets.chomp
   end
-  
+
   def aws_inform(message)
     print "\n ---> #{message}\n"
   end
-  
+
   # -----------
   def get_current_branch
     `git branch`.match(/\*\s([\w\/]+)/)[1]
@@ -171,17 +171,21 @@ namespace :aws_deploy do
       avaiable_snapshots.sort_by { |h| h[:snapshot_create_time] }[3..-1].each do |snap|
         snapshot_name = snap[:db_snapshot_identifier]
         aws_inform "Apagando snapshot antigo '#{snapshot_name}'..."
-        aws_run "rds-delete-db-snapshot #{snapshot_name} --force"
+        begin
+          aws_run "rds-delete-db-snapshot #{snapshot_name} --force"
+        rescue => e
+          aws_inform "Não foi possível apagar o snapshot '#{snapshot_name}': #{e}"
+        end
       end
     else
       aws_inform "Não é necessário apagar snapshots, há apenas #{avaiable_snapshots.size} atualmente."
     end
   end
   # -----------
-  
+
   desc "Deploy to sandbox at Amazon"
   task :sandbox, :speed do |t, args|
-    
+
     AWS_CONFIG ||= YAML::load(File.read('config/aws_deploy.yml'))["sandbox"]
 
     AwsDeploy.configure do |config|
@@ -200,35 +204,35 @@ namespace :aws_deploy do
     aws_generate_launchconfig(get_current_branch)
 
     launchconfig = aws_ask('Digite o nome do launchconfig gerado (e dê enter)')
-    
+
     old_autoscaling_min_size, old_autoscaling_max_size, old_autoscaling_desired_capacity = aws_get_old_autoscaling_settings
 
     begin
       aws_deactivate_autoscaling(old_autoscaling_desired_capacity)
-        
+
       # verificar que não há nenhuma instância pending (subindo) no auto-scaling-group
       aws_query_all_instances_inservice_and_healthy_on_autoscaling
-    
+
       # verificar que não há nenhuma instância fora de serviço no elastic-load-balancer
       aws_query_all_instances_inservice_on_load_balancer
-      
+
       if args.speed != 'fast'
         aws_set_maintenance_on_for_all_instances(credentials)
       end
 
       aws_shut_down_all_workers_on_all_instances(credentials)
-        
+
       # configurar auto-scaling-group para usar novo launchconfig
       aws_update_autoscalint_to_use_new_launchconfig(launchconfig)
-    
+
       aws_clear_cache(credentials) # FIXME
-    
+
       # pegar ids de todas as instâncias atuais no auto-scaling-group
       instance_ids = aws_get_current_instances_ids
-    
+
       # matar primaira máquina existente
       aws_kill_instance(instance_ids.first)
-      
+
       # esperar uma nova máquina levantar e estar InService no elastic-load-balancer
       aws_wait_new_instance_show_as_inservice_on_loadbalancer(launchconfig, instance_ids)
 
@@ -251,7 +255,7 @@ namespace :aws_deploy do
 
   desc "Deploy to production at Amazon"
   task :production, :speed do |t, args|
-    
+
     AWS_CONFIG ||= YAML::load(File.read('config/aws_deploy.yml'))["production"]
 
     AwsDeploy.configure do |config|
@@ -261,7 +265,7 @@ namespace :aws_deploy do
       config.rds_instance_identifier = AWS_CONFIG['rds_instance_identifier']
       config.path = AWS_CONFIG['path']
     end
-    
+
     args.with_defaults(:speed => 'normal')
 
     credentials = AwsDeploy::Credentials.new
@@ -271,17 +275,17 @@ namespace :aws_deploy do
     aws_check_new_migrations(credentials) if args.speed == 'fast'
 
     aws_generate_launchconfig('deploy')
-    
+
     launchconfig = aws_ask('Digite o nome do launchconfig gerado (e dê enter)')
-    
+
     old_autoscaling_min_size, old_autoscaling_max_size, old_autoscaling_desired_capacity = aws_get_old_autoscaling_settings
 
     begin
       aws_deactivate_autoscaling(old_autoscaling_desired_capacity)
-        
+
       # verificar que não há nenhuma instância pending (subindo) no auto-scaling-group
       aws_query_all_instances_inservice_and_healthy_on_autoscaling
-    
+
       # verificar que não há nenhuma instância fora de serviço no elastic-load-balancer
       aws_query_all_instances_inservice_on_load_balancer
 
@@ -296,18 +300,18 @@ namespace :aws_deploy do
       aws_rds_remove_old_snapshots
 
       aws_shut_down_all_workers_on_all_instances(credentials)
-    
+
       # configurar auto-scaling-group para usar novo launchconfig
       aws_update_autoscalint_to_use_new_launchconfig(launchconfig)
-    
+
       aws_clear_cache(credentials) # FIXME
-    
+
       # pegar ids de todas as instâncias atuais no auto-scaling-group
       instance_ids = aws_get_current_instances_ids
-    
+
       # matar primaira máquina existente
       aws_kill_instance(instance_ids.first)
-      
+
       # esperar uma nova máquina levantar e estar InService no elastic-load-balancer
       aws_wait_new_instance_show_as_inservice_on_loadbalancer(launchconfig, instance_ids)
 
@@ -327,5 +331,5 @@ namespace :aws_deploy do
     end
     aws_inform "Deploy para production finalizado!"
   end
-  
+
 end
