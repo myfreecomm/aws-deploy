@@ -1,6 +1,6 @@
 module AwsDeploy
   class Credentials
-    REG = /^AWSAccessKeyId=(.*)\r\nAWSSecretKey=(.*)\r\n$/
+    REG = /^AWSAccessKeyId=(.*)\nAWSSecretKey=(.*)\n$/
     def initialize
       file_path = (File.join(File.expand_path("~"), ".aws-credential-file"))
       if ENV["AWS_CREDENTIAL_FILE"]

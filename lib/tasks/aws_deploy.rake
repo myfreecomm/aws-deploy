@@ -1,4 +1,6 @@
 # -*- encoding : utf-8 -*-
+require 'nokogiri'
+
 namespace :aws_deploy do
 
   desc "connect_to_s3"
@@ -11,6 +13,7 @@ namespace :aws_deploy do
   end
 
   def aws_run(*cmd)
+    puts *cmd
     system(*cmd)
     raise "Command #{cmd.inspect} failed!" unless $?.success?
   end
@@ -39,11 +42,11 @@ namespace :aws_deploy do
     end
   end
 
-  def aws_check_new_migrations(credentials)
+  def aws_check_new_migrations(credentials, app_path)
     aws_inform "Verificando se o deploy possui novas migrations..."
 
     instance = AwsDeploy::Instance.new(credentials).find_all_in_service.first
-    remote_migrations_count = `ssh #{instance[:dns_name]} "ls -1 /srv/myfinance/src/db/migrate/*.rb | wc -l"`.strip
+    remote_migrations_count = `ssh #{instance[:dns_name]} "ls -1 #{app_path}db/migrate/*.rb | wc -l"`.strip
     local_migrations_count = `ls -1 #{Rails.root}/db/migrate/*.rb | wc -l`.strip
 
     if remote_migrations_count != local_migrations_count
@@ -150,6 +153,11 @@ namespace :aws_deploy do
     end
     aws_inform "Snapshot '#{snapshot_name}' criado com sucesso."
   end
+  def aws_get_last_launchconfig
+    output = `as-describe-launch-configs --show-xml`
+    xml = Nokogiri::XML.parse(output)
+    xml.search('LaunchConfigurationName').last.text
+  end
   def aws_rds_remove_old_snapshots
     db_name = AwsDeploy.configuration.rds_instance_identifier
     raise "Invalid RDS DB instance name" if (db_name.nil? || db_name == '')
@@ -199,11 +207,14 @@ namespace :aws_deploy do
     args.with_defaults(:speed => 'normal')
     credentials = AwsDeploy::Credentials.new
 
-    aws_check_new_migrations(credentials) if args.speed == 'fast'
+    aws_check_new_migrations(credentials, AWS_CONFIG['path']) if args.speed == 'fast'
 
-    aws_generate_launchconfig(get_current_branch)
+    # aws_generate_launchconfig(get_current_branch)
 
-    launchconfig = aws_ask('Digite o nome do launchconfig gerado (e dê enter)')
+    launchconfig = aws_get_last_launchconfig
+
+    new_launchconfig = aws_ask("Digite o nome do launchconfig gerado (e dê enter) [#{launchconfig}]")
+    launchconfig = new_launchconfig unless new_launchconfig.blank?
 
     old_autoscaling_min_size, old_autoscaling_max_size, old_autoscaling_desired_capacity = aws_get_old_autoscaling_settings
 
@@ -225,13 +236,13 @@ namespace :aws_deploy do
       # configurar auto-scaling-group para usar novo launchconfig
       aws_update_autoscalint_to_use_new_launchconfig(launchconfig)
 
-      aws_clear_cache(credentials) # FIXME
+      # aws_clear_cache(credentials) # FIXME
 
       # pegar ids de todas as instâncias atuais no auto-scaling-group
       instance_ids = aws_get_current_instances_ids
 
       # matar primaira máquina existente
-      aws_kill_instance(instance_ids.first)
+      aws_kill_instance(instance_ids.first) unless instance_ids.empty?
 
       # esperar uma nova máquina levantar e estar InService no elastic-load-balancer
       aws_wait_new_instance_show_as_inservice_on_loadbalancer(launchconfig, instance_ids)
@@ -272,7 +283,7 @@ namespace :aws_deploy do
 
     aws_check_current_branch('deploy')
 
-    aws_check_new_migrations(credentials) if args.speed == 'fast'
+    aws_check_new_migrations(credentials, AWS_CONFIG['path']) if args.speed == 'fast'
 
     aws_generate_launchconfig('deploy')
 
