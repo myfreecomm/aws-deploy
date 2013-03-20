@@ -13,3 +13,15 @@ Exemplo de arquivo 'config/aws_deploy.yml'
       load_balancer_name: "Fundos-Sandbox"
       path: "/srv/fundos/src"
       rds_instance_identifier: "fundos"
+
+Exemplo de uso:
+---------------
+
+    Sandbox:
+    rake aws_deploy:sandbox generate_launchconfig=on
+    generate_launchconfig=on vai gerar um launch config novo para fazer o deploy. (apenas sandbox)
+
+    Production:
+    rake aws_deploy:production
+    Sempre gera um novo lauchconfig.
+

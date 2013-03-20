@@ -59,6 +59,11 @@ namespace :aws_deploy do
     aws_inform "Gerando novo launchconfig usando o branch #{branch}..."
     aws_run "cd #{ENV['CERTMAN_HOME']} && . bin/activate && cd src && fab #{AwsDeploy.configuration.environment} deploy:#{File.dirname(Rails.root)},branch=#{branch}"
   end
+  def aws_freeze_instance(instance_id)
+    raise "CERTMAN_HOME not set" if ENV['CERTMAN_HOME'].blank?
+    aws_inform "Executando freeze da instancia #{instance_id}..."
+    aws_run "cd #{ENV['CERTMAN_HOME']} && . bin/activate && cd src && fab asg:#{AwsDeploy.configuration.autoscaling_name} freeze:instance_id=#{instance_id}"
+  end
   def aws_get_old_autoscaling_settings
     aws_inform "Buscando configurações atuais do auto-scaling-group..."
     output = `as-describe-auto-scaling-groups #{AwsDeploy.configuration.autoscaling_name} --show-xml`
@@ -102,7 +107,7 @@ namespace :aws_deploy do
     output = `as-describe-auto-scaling-groups #{AwsDeploy.configuration.autoscaling_name} --show-xml`
     xml = Nokogiri::XML.parse(output)
     ids = xml.search("AutoScalingGroups Instances member InstanceId").map(&:text)
-    raise "Nenhuma instância emcontrada no auto-scaling-group" if ids.empty?
+    aws_inform "Nenhuma instância encontrada no auto-scaling-group" if ids.empty?
     ids
   end
   def aws_kill_instance(id)
@@ -132,6 +137,9 @@ namespace :aws_deploy do
     aws_inform "Nova instância (#{new_instance_id}) está InService no elastic-load-balancer!"
   end
   def aws_reactivate_autoscaling(min_size, max_size, desired_capacity)
+    min_size = 1 if min_size.to_i <= 0
+    max_size = min_size if max_size.to_i < min_size.to_i
+
     aws_inform "'Re-ativando' auto-scaling..."
     aws_run "as-update-auto-scaling-group #{AwsDeploy.configuration.autoscaling_name} --min-size #{min_size} --max-size #{max_size} --desired-capacity #{desired_capacity}"
   end
@@ -209,7 +217,9 @@ namespace :aws_deploy do
 
     aws_check_new_migrations(credentials, AWS_CONFIG['path']) if args.speed == 'fast'
 
-    # aws_generate_launchconfig(get_current_branch)
+    if ENV['generate_launchconfig'] == 'on'
+      aws_generate_launchconfig(get_current_branch)
+    end
 
     launchconfig = aws_get_last_launchconfig
 
@@ -241,7 +251,7 @@ namespace :aws_deploy do
       # pegar ids de todas as instâncias atuais no auto-scaling-group
       instance_ids = aws_get_current_instances_ids
 
-      # matar primaira máquina existente
+      # matar primeira máquina existente
       aws_kill_instance(instance_ids.first) unless instance_ids.empty?
 
       # esperar uma nova máquina levantar e estar InService no elastic-load-balancer
@@ -264,6 +274,24 @@ namespace :aws_deploy do
     aws_inform "Deploy para sandbox finalizado!"
   end
 
+  desc "Do freeze in one instance"
+  task :freeze, [:instance_id, :env] do |t, args|
+    options = args.with_defaults :env => 'sandbox'
+    AWS_CONFIG ||= YAML::load(File.read('config/aws_deploy.yml'))[options[:env]]
+
+    AwsDeploy.configure do |config|
+      config.environment = AWS_CONFIG['environment']
+      config.autoscaling_name = AWS_CONFIG['autoscaling_name']
+      config.load_balancer_name = AWS_CONFIG['load_balancer_name']
+      config.rds_instance_identifier = AWS_CONFIG['rds_instance_identifier']
+      config.path = AWS_CONFIG['path']
+    end
+
+    raise "instance_id é obrigatório" unless options.has_key? :instance_id
+    aws_freeze_instance(options[:instance_id])
+  end
+
+
   desc "Deploy to production at Amazon"
   task :production, :speed do |t, args|
 
@@ -281,13 +309,15 @@ namespace :aws_deploy do
 
     credentials = AwsDeploy::Credentials.new
 
-    aws_check_current_branch('deploy')
+    aws_check_current_branch('master')
 
     aws_check_new_migrations(credentials, AWS_CONFIG['path']) if args.speed == 'fast'
 
-    aws_generate_launchconfig('deploy')
+    aws_generate_launchconfig('master')
 
-    launchconfig = aws_ask('Digite o nome do launchconfig gerado (e dê enter)')
+    launchconfig = aws_get_last_launchconfig
+    aws_inform ("Confira o lauchconfig que será usado: [#{launchconfig}]")
+
 
     old_autoscaling_min_size, old_autoscaling_max_size, old_autoscaling_desired_capacity = aws_get_old_autoscaling_settings
 
@@ -315,7 +345,7 @@ namespace :aws_deploy do
       # configurar auto-scaling-group para usar novo launchconfig
       aws_update_autoscalint_to_use_new_launchconfig(launchconfig)
 
-      aws_clear_cache(credentials) # FIXME
+      # aws_clear_cache(credentials) # FIXME
 
       # pegar ids de todas as instâncias atuais no auto-scaling-group
       instance_ids = aws_get_current_instances_ids
