@@ -306,18 +306,18 @@ namespace :aws_deploy do
     end
 
     args.with_defaults(:speed => 'normal')
-
     credentials = AwsDeploy::Credentials.new
-
-    aws_check_current_branch('master')
 
     aws_check_new_migrations(credentials, AWS_CONFIG['path']) if args.speed == 'fast'
 
-    aws_generate_launchconfig('master')
+    if ENV['generate_launchconfig'] == 'on'
+      aws_generate_launchconfig("master")
+    end
 
     launchconfig = aws_get_last_launchconfig
-    aws_inform ("Confira o lauchconfig que será usado: [#{launchconfig}]")
 
+    new_launchconfig = aws_ask("Digite o nome do launchconfig gerado (e dê enter) [#{launchconfig}]")
+    launchconfig = new_launchconfig unless new_launchconfig.blank?
 
     old_autoscaling_min_size, old_autoscaling_max_size, old_autoscaling_desired_capacity = aws_get_old_autoscaling_settings
 
@@ -330,15 +330,16 @@ namespace :aws_deploy do
       # verificar que não há nenhuma instância fora de serviço no elastic-load-balancer
       aws_query_all_instances_inservice_on_load_balancer
 
-      if args.speed != 'fast'
-        aws_set_maintenance_on_for_all_instances(credentials)
-      end
-
       # tira snapshot (backup) do banco
       new_snapshot_name = aws_rds_create_snapshot
 
       # remove snapshots antigos (mantém apenas os últimos 3)
       aws_rds_remove_old_snapshots
+
+
+      if args.speed != 'fast'
+        aws_set_maintenance_on_for_all_instances(credentials)
+      end
 
       aws_shut_down_all_workers_on_all_instances(credentials)
 
@@ -350,8 +351,8 @@ namespace :aws_deploy do
       # pegar ids de todas as instâncias atuais no auto-scaling-group
       instance_ids = aws_get_current_instances_ids
 
-      # matar primaira máquina existente
-      aws_kill_instance(instance_ids.first)
+      # matar primeira máquina existente
+      aws_kill_instance(instance_ids.first) unless instance_ids.empty?
 
       # esperar uma nova máquina levantar e estar InService no elastic-load-balancer
       aws_wait_new_instance_show_as_inservice_on_loadbalancer(launchconfig, instance_ids)
@@ -371,6 +372,7 @@ namespace :aws_deploy do
       aws_reactivate_autoscaling(old_autoscaling_min_size, old_autoscaling_max_size, old_autoscaling_desired_capacity)
     end
     aws_inform "Deploy para production finalizado!"
+
   end
 
 end
