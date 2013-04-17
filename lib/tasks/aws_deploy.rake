@@ -46,11 +46,13 @@ namespace :aws_deploy do
     aws_inform "Verificando se o deploy possui novas migrations..."
 
     instance = AwsDeploy::Instance.new(credentials).find_all_in_service.first
-    remote_migrations_count = `ssh #{instance[:dns_name]} "ls -1 #{app_path}db/migrate/*.rb | wc -l"`.strip
-    local_migrations_count = `ls -1 #{Rails.root}/db/migrate/*.rb | wc -l`.strip
+    unless instance.nil?
+      remote_migrations_count = `ssh #{instance[:dns_name]} "ls -1 #{app_path}db/migrate/*.rb | wc -l"`.strip
+      local_migrations_count = `ls -1 #{Rails.root}/db/migrate/*.rb | wc -l`.strip
 
-    if remote_migrations_count != local_migrations_count
-      raise "O deploy possui novas migrations, você não pode usar a opção 'fast'!"
+      if remote_migrations_count != local_migrations_count
+        raise "O deploy possui novas migrations, você não pode usar a opção 'fast'!"
+      end
     end
   end
 
