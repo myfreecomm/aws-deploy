@@ -64,7 +64,7 @@ namespace :aws_deploy do
   def aws_freeze_instance(instance_id)
     raise "CERTMAN_HOME not set" if ENV['CERTMAN_HOME'].blank?
     aws_inform "Executando freeze da instancia #{instance_id}..."
-    aws_run "cd #{ENV['CERTMAN_HOME']} && . bin/activate && cd src && fab asg:#{AwsDeploy.configuration.autoscaling_name} freeze:instance_id=#{instance_id}"
+    aws_run "cd #{ENV['CERTMAN_HOME']} && . bin/activate && cd src && fab asg:#{AwsDeploy.configuration.autoscaling_name} freeze:instance_id=#{instance_id} --keepalive=15"
   end
   def aws_get_old_autoscaling_settings
     aws_inform "Buscando configurações atuais do auto-scaling-group..."
