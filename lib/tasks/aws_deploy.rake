@@ -137,6 +137,7 @@ namespace :aws_deploy do
       sleep 10
     end
     aws_inform "Nova instância (#{new_instance_id}) está InService no elastic-load-balancer!"
+    new_instance_id
   end
   def aws_reactivate_autoscaling(min_size, max_size, desired_capacity)
     min_size = 1 if min_size.to_i <= 0
@@ -199,6 +200,16 @@ namespace :aws_deploy do
       aws_inform "Não é necessário apagar snapshots, há apenas #{avaiable_snapshots.size} atualmente."
     end
   end
+  def aws_kill_instance_or_update_desired_capacity(instance_ids)
+    if instance_ids.size > 1
+      # matar primeira máquina existente se tiver mais de uma
+      first_instance_id = instance_ids.first
+      aws_kill_instance(first_instance_id)
+    else
+      # se max_size e desired forem 1 coloca para 2 para manter sempre uma instância ativa pelo menos na hora do deploy.
+      aws_deactivate_autoscaling(2)
+    end
+  end
   # -----------
 
   desc "Deploy to sandbox at Amazon"
@@ -253,14 +264,13 @@ namespace :aws_deploy do
       # pegar ids de todas as instâncias atuais no auto-scaling-group
       instance_ids = aws_get_current_instances_ids
 
-      # matar primeira máquina existente
-      aws_kill_instance(instance_ids.first) unless instance_ids.empty?
+      aws_kill_instance_or_update_desired_capacity(instance_ids)
 
       # esperar uma nova máquina levantar e estar InService no elastic-load-balancer
       aws_wait_new_instance_show_as_inservice_on_loadbalancer(launchconfig, instance_ids)
 
-      # matar todas as outras instâncias
-      instance_ids.shift
+
+      # matar todas as outras instâncias em manutenção
       unless instance_ids.empty?
         aws_inform "Terminando todas as outras instâncias..."
         until instance_ids.empty?
@@ -353,14 +363,15 @@ namespace :aws_deploy do
       # pegar ids de todas as instâncias atuais no auto-scaling-group
       instance_ids = aws_get_current_instances_ids
 
-      # matar primeira máquina existente
-      aws_kill_instance(instance_ids.first) unless instance_ids.empty?
+      aws_kill_instance_or_update_desired_capacity(instance_ids)
 
       # esperar uma nova máquina levantar e estar InService no elastic-load-balancer
-      aws_wait_new_instance_show_as_inservice_on_loadbalancer(launchconfig, instance_ids)
+      new_instance_id = aws_wait_new_instance_show_as_inservice_on_loadbalancer(launchconfig, instance_ids)
+
+      # executar freeze da instância criada
+      aws_freeze_instance(new_instance_id)
 
       # matar todas as outras instâncias
-      instance_ids.shift
       unless instance_ids.empty?
         aws_inform "Terminando todas as outras instâncias..."
         until instance_ids.empty?
