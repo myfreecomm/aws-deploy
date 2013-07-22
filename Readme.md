@@ -19,9 +19,9 @@ Exemplo de uso:
 
     Sandbox:
     rake aws_deploy:sandbox generate_launchconfig=on
-    generate_launchconfig=on vai gerar um launch config novo para fazer o deploy. (apenas sandbox)
+    generate_launchconfig=on vai gerar um launch config novo para fazer o deploy (default=off).
 
     Production:
-    rake aws_deploy:production
-    Sempre gera um novo lauchconfig.
+    rake aws_deploy:production [generate_launchconfig=on]
+    generate_launchconfig=on vai gerar um launch config novo para fazer o deploy (default=off).
 
