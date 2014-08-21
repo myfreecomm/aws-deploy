@@ -15,5 +15,5 @@ Gem::Specification.new do |gem|
   gem.require_paths = ["lib"]
   gem.version       = Aws::Deploy::VERSION
 
-  gem.add_dependency 'aws', '2.5.6'
+  gem.add_dependency 'aws', '2.10.2'
 end
