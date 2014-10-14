@@ -34,7 +34,7 @@ namespace :aws_deploy do
 
   # -----------
   def get_current_branch
-    `git branch`.match(/\*\s([\w\/]+)/)[1]
+    `git branch`.match(/\*\s([\w\/-]+)/)[1]
   end
   def aws_check_current_branch(branch_to_deploy)
     if get_current_branch != branch_to_deploy
