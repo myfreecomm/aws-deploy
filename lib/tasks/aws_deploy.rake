@@ -125,8 +125,8 @@ namespace :aws_deploy do
         new_instance_node = xml.search("AutoScalingGroups Instances member").select { |i| i.at("LaunchConfigurationName").text == launchconfig && !old_instance_ids.include?(i.at('InstanceId').text) }.first
         new_instance_id = new_instance_node.at('InstanceId').text unless new_instance_node.nil?
       end
-      aws_inform "Esperando 5 segundos para nova instância surgir..."
-      sleep 5
+      aws_inform "Esperando 15 segundos para nova instância surgir..."
+      sleep 15
     end
     aws_inform "Nova instância descoberta, id = #{new_instance_id}"
     new_instance_up = false
