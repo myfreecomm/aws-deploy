@@ -144,7 +144,8 @@ namespace :aws_deploy do
     max_size = min_size if max_size.to_i < min_size.to_i
 
     aws_inform "'Re-ativando' auto-scaling..."
-    aws_run "as-update-auto-scaling-group #{AwsDeploy.configuration.autoscaling_name} --min-size #{min_size} --max-size #{max_size} --desired-capacity #{desired_capacity} --health-check-type ELB"
+    # TODO grace-period and default-cooldown should be parameterized
+    aws_run "as-update-auto-scaling-group #{AwsDeploy.configuration.autoscaling_name} --min-size #{min_size} --max-size #{max_size} --desired-capacity #{desired_capacity} --grace-period 600 --default-cooldown 300 --health-check-type ELB"
   end
   def aws_rds_create_snapshot
     db_name = AwsDeploy.configuration.rds_instance_identifier
