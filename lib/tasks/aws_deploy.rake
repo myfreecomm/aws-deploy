@@ -34,7 +34,7 @@ namespace :aws_deploy do
 
   # -----------
   def get_current_branch
-    `git branch`.match(/\*\s([\w\/-]+)/)[1]
+    `git branch`.match(/\*\s([\.\w\/-]+)/)[1]
   end
   def aws_check_current_branch(branch_to_deploy)
     if get_current_branch != branch_to_deploy
@@ -99,7 +99,7 @@ namespace :aws_deploy do
   end
   def aws_update_autoscalint_to_use_new_launchconfig(launchconfig)
     aws_inform "Atualizando auto-scaling-group para usar novo launchconfig..."
-    aws_run "as-update-auto-scaling-group #{AwsDeploy.configuration.autoscaling_name} --launch-configuration #{launchconfig}"
+    aws_run "as-update-auto-scaling-group #{AwsDeploy.configuration.autoscaling_name} --launch-configuration #{launchconfig} --health-check-type EC2"
   end
   def aws_clear_cache(credentials) # FIXME
     aws_inform "Limpando elastic-cache (memcached) ..."
@@ -144,7 +144,7 @@ namespace :aws_deploy do
     max_size = min_size if max_size.to_i < min_size.to_i
 
     aws_inform "'Re-ativando' auto-scaling..."
-    aws_run "as-update-auto-scaling-group #{AwsDeploy.configuration.autoscaling_name} --min-size #{min_size} --max-size #{max_size} --desired-capacity #{desired_capacity}"
+    aws_run "as-update-auto-scaling-group #{AwsDeploy.configuration.autoscaling_name} --min-size #{min_size} --max-size #{max_size} --desired-capacity #{desired_capacity} --health-check-type ELB"
   end
   def aws_rds_create_snapshot
     db_name = AwsDeploy.configuration.rds_instance_identifier
