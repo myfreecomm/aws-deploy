@@ -73,7 +73,9 @@ namespace :aws_deploy do
     min_size = xml.at('AutoScalingGroups member > MinSize').text
     max_size = xml.at('AutoScalingGroups member > MaxSize').text
     desired_capacity = xml.at('AutoScalingGroups member > DesiredCapacity').text
-    [min_size, max_size, desired_capacity]
+    grace_period = xml.at('AutoScalingGroups member > HealthCheckGracePeriod').text
+    default_cd = xml.at('AutoScalingGroups member > DefaultCooldown').text
+    [min_size, max_size, desired_capacity, grace_period, default_cd]
   end
   def aws_deactivate_autoscaling(desired_capacity)
     aws_inform "'Desativando' auto-scaling..." # significa alterar desired-capacity para o número de instâncias atuais
@@ -139,13 +141,13 @@ namespace :aws_deploy do
     aws_inform "Nova instância (#{new_instance_id}) está InService no elastic-load-balancer!"
     new_instance_id
   end
-  def aws_reactivate_autoscaling(min_size, max_size, desired_capacity)
+  def aws_reactivate_autoscaling(min_size, max_size, desired_capacity, grace_period, default_cd)
     min_size = 1 if min_size.to_i <= 0
     max_size = min_size if max_size.to_i < min_size.to_i
 
     aws_inform "'Re-ativando' auto-scaling..."
     # TODO grace-period and default-cooldown should be parameterized
-    aws_run "as-update-auto-scaling-group #{AwsDeploy.configuration.autoscaling_name} --min-size #{min_size} --max-size #{max_size} --desired-capacity #{desired_capacity} --grace-period 600 --default-cooldown 300 --health-check-type ELB"
+    aws_run "as-update-auto-scaling-group #{AwsDeploy.configuration.autoscaling_name} --min-size #{min_size} --max-size #{max_size} --desired-capacity #{desired_capacity} --grace-period #{grace_period} --default-cooldown #{default_cd} --health-check-type ELB"
   end
   def aws_rds_create_snapshot
     db_name = AwsDeploy.configuration.rds_instance_identifier
@@ -240,7 +242,7 @@ namespace :aws_deploy do
     new_launchconfig = aws_ask("Digite o nome do launchconfig gerado (e dê enter) [#{launchconfig}]")
     launchconfig = new_launchconfig unless new_launchconfig.blank?
 
-    old_autoscaling_min_size, old_autoscaling_max_size, old_autoscaling_desired_capacity = aws_get_old_autoscaling_settings
+    old_autoscaling_min_size, old_autoscaling_max_size, old_autoscaling_desired_capacity, grace_period, default_cd = aws_get_old_autoscaling_settings
 
     begin
       aws_deactivate_autoscaling(old_autoscaling_desired_capacity)
@@ -270,6 +272,8 @@ namespace :aws_deploy do
       # esperar uma nova máquina levantar e estar InService no elastic-load-balancer
       aws_wait_new_instance_show_as_inservice_on_loadbalancer(launchconfig, instance_ids)
 
+      # executar freeze da instância criada
+      aws_freeze_instance(new_instance_id)
 
       # matar todas as outras instâncias em manutenção
       unless instance_ids.empty?
@@ -282,7 +286,7 @@ namespace :aws_deploy do
     ensure
       # reativar auto-scaling
       # significa voltar para desired-capacity default
-      aws_reactivate_autoscaling(old_autoscaling_min_size, old_autoscaling_max_size, old_autoscaling_desired_capacity)
+      aws_reactivate_autoscaling(old_autoscaling_min_size, old_autoscaling_max_size, old_autoscaling_desired_capacity, grace_period, default_cd)
     end
     aws_inform "Deploy para sandbox finalizado!"
   end
@@ -332,7 +336,7 @@ namespace :aws_deploy do
     new_launchconfig = aws_ask("Digite o nome do launchconfig gerado (e dê enter) [#{launchconfig}]")
     launchconfig = new_launchconfig unless new_launchconfig.blank?
 
-    old_autoscaling_min_size, old_autoscaling_max_size, old_autoscaling_desired_capacity = aws_get_old_autoscaling_settings
+    old_autoscaling_min_size, old_autoscaling_max_size, old_autoscaling_desired_capacity, grace_period, default_cd = aws_get_old_autoscaling_settings
 
     begin
       aws_deactivate_autoscaling(old_autoscaling_desired_capacity)
@@ -383,7 +387,7 @@ namespace :aws_deploy do
     ensure
       # reativar auto-scaling
       # significa voltar para desired-capacity default
-      aws_reactivate_autoscaling(old_autoscaling_min_size, old_autoscaling_max_size, old_autoscaling_desired_capacity)
+      aws_reactivate_autoscaling(old_autoscaling_min_size, old_autoscaling_max_size, old_autoscaling_desired_capacity, grace_period, default_cd)
     end
     aws_inform "Deploy para production finalizado!"
 
