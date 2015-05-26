@@ -270,7 +270,7 @@ namespace :aws_deploy do
       aws_kill_instance_or_update_desired_capacity(instance_ids)
 
       # esperar uma nova máquina levantar e estar InService no elastic-load-balancer
-      aws_wait_new_instance_show_as_inservice_on_loadbalancer(launchconfig, instance_ids)
+      new_instance_id = aws_wait_new_instance_show_as_inservice_on_loadbalancer(launchconfig, instance_ids)
 
       # executar freeze da instância criada
       aws_freeze_instance(new_instance_id)
